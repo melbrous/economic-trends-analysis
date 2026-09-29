@@ -25,6 +25,9 @@ FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 SERIES_IDS = {
     "UNRATE": "Unemployment Rate",
+    "CPIAUCSL": "Consumer Price Index",
+    "FEDFUNDS": "Federal Funds Rate",
+    "MORTGAGE30US": "30-Year Fixed Mortgage Rate",
 }
 
 MAX_RETRIES = 3
