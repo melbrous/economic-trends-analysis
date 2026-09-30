@@ -7,9 +7,6 @@ Run:
 import sys
 from pathlib import Path
 
-# Streamlit runs this file directly, so it does not automatically add the
-# project root to the import path the way `python -m` does. Add it manually
-# so `from src...` imports work.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
@@ -39,6 +36,25 @@ def load_observations(series_id: str) -> pd.DataFrame:
     return pd.read_sql(query, engine, params={"series_id": series_id})
 
 
+def compute_yoy_change(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Resample to monthly averages, then compute % change vs. the same month
+    one year earlier. Works even for weekly series (like mortgage rates)
+    by first collapsing to monthly frequency.
+    """
+    df = df.copy()
+    df["observation_date"] = pd.to_datetime(df["observation_date"])
+
+    monthly = (
+        df.set_index("observation_date")["value"]
+        .resample("MS")
+        .mean()
+        .to_frame()
+    )
+    monthly["yoy_pct_change"] = monthly["value"].pct_change(periods=12) * 100
+    return monthly.reset_index()
+
+
 def main() -> None:
     st.title("Economic Trends Dashboard")
     st.caption("Data sourced from FRED (Federal Reserve Economic Data)")
@@ -59,6 +75,8 @@ def main() -> None:
         options=list(series_options.keys()),
         default=[list(series_options.keys())[0]],
     )
+
+    show_yoy = st.checkbox("Show year-over-year % change", value=False)
 
     if not selected_names:
         st.info("Select at least one series above.")
@@ -81,6 +99,26 @@ def main() -> None:
         fig = px.line(df, x="observation_date", y="value")
         fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350)
         st.plotly_chart(fig, use_container_width=True)
+
+        if show_yoy:
+            yoy_df = compute_yoy_change(df)
+            yoy_df = yoy_df.dropna(subset=["yoy_pct_change"])
+
+            if yoy_df.empty:
+                st.caption("Not enough history yet to compute a year-over-year change.")
+            else:
+                latest_yoy = yoy_df.iloc[-1]
+                st.caption(
+                    f"Year-over-year change as of {latest_yoy['observation_date'].date()}: "
+                    f"{latest_yoy['yoy_pct_change']:+.2f}%"
+                )
+                yoy_fig = px.line(
+                    yoy_df, x="observation_date", y="yoy_pct_change",
+                    labels={"yoy_pct_change": "YoY % change"},
+                )
+                yoy_fig.add_hline(y=0, line_dash="dot", line_color="gray")
+                yoy_fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=250)
+                st.plotly_chart(yoy_fig, use_container_width=True)
 
 
 if __name__ == "__main__":
