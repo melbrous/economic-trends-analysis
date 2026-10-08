@@ -13,6 +13,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from src.analysis.metrics import compute_yoy_change
 from src.db.connection import get_engine
 
 st.set_page_config(page_title="Economic Trends Dashboard", layout="wide")
@@ -34,25 +35,6 @@ def load_observations(series_id: str) -> pd.DataFrame:
         ORDER BY observation_date
     """
     return pd.read_sql(query, engine, params={"series_id": series_id})
-
-
-def compute_yoy_change(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Resample to monthly averages, then compute % change vs. the same month
-    one year earlier. Works even for weekly series (like mortgage rates)
-    by first collapsing to monthly frequency.
-    """
-    df = df.copy()
-    df["observation_date"] = pd.to_datetime(df["observation_date"])
-
-    monthly = (
-        df.set_index("observation_date")["value"]
-        .resample("MS")
-        .mean()
-        .to_frame()
-    )
-    monthly["yoy_pct_change"] = monthly["value"].pct_change(periods=12) * 100
-    return monthly.reset_index()
 
 
 def main() -> None:
